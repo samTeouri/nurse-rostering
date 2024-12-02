@@ -78,3 +78,17 @@ def solve_nurse_rostering(data):
         y_min[d, s] * cover[d][3] + y_max[d, s] * cover[d][4] for d, s in y_min
     )
     model.minimize(penalty)
+
+    # Resolution
+    solution = model.solve(log_output=True)
+
+    # Results
+    if solution:
+        print("Solution trouvée avec un coût total de :", solution.objective_value)
+        assignments = [
+            (e, d, s) for e in staff for d in range(horizon) for s in shifts if x[e, d, s].solution_value > 0.5
+        ]
+        return assignments
+    else:
+        print("Pas de solution trouvée.")
+        return None
