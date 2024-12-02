@@ -27,3 +27,11 @@ def solve_nurse_rostering(data):
         ((d, s) for d in range(horizon) for s in shifts),
         name="y_max"
     )
+
+    # Contraintes
+
+    # 1. Un employé ne peut travailler qu'un seul poste par jour
+    for e in staff:
+        for d in range(horizon):
+            model.add_constraint(model.sum(x[e, d, s] for s in shifts) <= 1, f"one_shift_per_day_{e}_{d}")
+
