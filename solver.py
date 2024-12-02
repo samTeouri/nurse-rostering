@@ -45,4 +45,11 @@ def solve_nurse_rostering(data):
         model.add_constraint(model.sum(x[e, d, s] for e in staff) + y_min[d, s] >= req, f"cover_min_{d}_{s}")
         model.add_constraint(model.sum(x[e, d, s] for e in staff) - y_max[d, s] <= req, f"cover_max_{d}_{s}")
 
+    # 4. Contraintes sur le nombre total d'heures travaillées
+    for e in staff:
+        min_hours = int(staff[e]["constraints"][2])  # tmin
+        max_hours = int(staff[e]["constraints"][1])  # tmax
+        total_hours = model.sum(x[e, d, s] * int(shifts[s]["duration"]) for d in range(horizon) for s in shifts)
+        model.add_constraint(total_hours >= min_hours, f"min_hours_{e}")
+        model.add_constraint(total_hours <= max_hours, f"max_hours_{e}")
 
