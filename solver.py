@@ -68,3 +68,13 @@ def solve_nurse_rostering(data):
                 model.sum(x[e, d + k, s] for k in range(max_consec) for s in shifts) <= max_consec,
                 f"max_consec_{e}_{d}"
             )
+
+    # Objective function
+    penalty = model.sum(
+        w * (1 - x[e, d, s]) for e, d, s, w in shift_on_requests
+    ) + model.sum(
+        w * x[e, d, s] for e, d, s, w in shift_off_requests
+    ) + model.sum(
+        y_min[d, s] * cover[d][3] + y_max[d, s] * cover[d][4] for d, s in y_min
+    )
+    model.minimize(penalty)
