@@ -35,3 +35,10 @@ def solve_nurse_rostering(data):
         for d in range(horizon):
             model.add_constraint(model.sum(x[e, d, s] for s in shifts) <= 1, f"one_shift_per_day_{e}_{d}")
 
+    # 2. Contraintes sur les jours de repos
+    for e, days in days_off.items():
+        for d in days:
+            model.add_constraint(model.sum(x[e, d, s] for s in shifts) == 0, f"days_off_{e}_{d}")
+    
+    
+
