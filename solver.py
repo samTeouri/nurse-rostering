@@ -39,6 +39,10 @@ def solve_nurse_rostering(data):
     for e, days in days_off.items():
         for d in days:
             model.add_constraint(model.sum(x[e, d, s] for s in shifts) == 0, f"days_off_{e}_{d}")
-    
-    
+
+    # 3. Couverture des postes
+    for d, s, req, _, _ in cover:
+        model.add_constraint(model.sum(x[e, d, s] for e in staff) + y_min[d, s] >= req, f"cover_min_{d}_{s}")
+        model.add_constraint(model.sum(x[e, d, s] for e in staff) - y_max[d, s] <= req, f"cover_max_{d}_{s}")
+
 
