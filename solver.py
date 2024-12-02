@@ -54,7 +54,7 @@ def solve_nurse_rostering(data):
         model.add_constraint(total_hours <= max_hours, f"max_hours_{e}")
 
 
-    # 5. Contraintes sur les jours de travail consécutifs
+    # 5 et 6. Contraintes sur les jours de travail consécutifs
     for e in staff:
         min_consec = int(staff[e]["constraints"][4])
         max_consec = int(staff[e]["constraints"][3])
