@@ -138,7 +138,7 @@ def solve_nurse_rostering(data):
     #         model.add_constraint(
     #             model.sum(x[e, d + k, s] for k in range(max_consec) for s in shifts) <= max_consec,
     #             f"max_consec_{e}_{d}"
-            )
+    #        )
 
     # 7. Contraintes sur le nombre minimum de jours consécutifs de repos
     # for e in staff:
