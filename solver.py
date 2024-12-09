@@ -1,97 +1,5 @@
 from docplex.mp.model import Model
 
-def solve_nurse_rostering(data):
-
-    # Création du modèle
-    model = Model(name="Nurse Rostering")
-
-    # Chargement des données depuis `data`
-    horizon = data["horizon"]
-    shifts = data["shifts"]
-    staff = data["staff"]
-    days_off = data["days_off"]
-    shift_on_requests = data["shift_on_requests"]
-    shift_off_requests = data["shift_off_requests"]
-    cover = data["cover"]
-
-    # Variables de décision
-    x = model.binary_var_dict(
-        ((e, d, s) for e in staff for d in range(horizon) for s in shifts),
-        name="x"
-    )
-    y_min = model.integer_var_dict(
-        ((d, s) for d in range(horizon) for s in shifts),
-        name="y_min"
-    )
-    y_max = model.integer_var_dict(
-        ((d, s) for d in range(horizon) for s in shifts),
-        name="y_max"
-    )
-
-    # Contraintes
-
-    # 1. Un employé ne peut travailler qu'un seul poste par jour
-    for e in staff:
-        for d in range(horizon):
-            model.add_constraint(model.sum(x[e, d, s] for s in shifts) <= 1, f"one_shift_per_day_{e}_{d}")
-
-    # 2. Contraintes sur les jours de repos
-    for e, days in days_off.items():
-        for d in days:
-            model.add_constraint(model.sum(x[e, d, s] for s in shifts) == 0, f"days_off_{e}_{d}")
-
-    # 3. Couverture des postes
-    for d, s, req, _, _ in cover:
-        model.add_constraint(model.sum(x[e, d, s] for e in staff) + y_min[d, s] >= req, f"cover_min_{d}_{s}")
-        model.add_constraint(model.sum(x[e, d, s] for e in staff) - y_max[d, s] <= req, f"cover_max_{d}_{s}")
-
-    # 4. Contraintes sur le nombre total d'heures travaillées
-    for e in staff:
-        min_hours = int(staff[e]["constraints"][2])  # tmin
-        max_hours = int(staff[e]["constraints"][1])  # tmax
-        total_hours = model.sum(x[e, d, s] * int(shifts[s]["duration"]) for d in range(horizon) for s in shifts)
-        model.add_constraint(total_hours >= min_hours, f"min_hours_{e}")
-        model.add_constraint(total_hours <= max_hours, f"max_hours_{e}")
-
-
-    # 5 et 6. Contraintes sur les jours de travail consécutifs
-    for e in staff:
-        min_consec = int(staff[e]["constraints"][4])
-        max_consec = int(staff[e]["constraints"][3])
-        for d in range(horizon - min_consec + 1):
-            model.add_constraint(
-                model.sum(x[e, d + k, s] for k in range(min_consec) for s in shifts) >= min_consec,
-                f"min_consec_{e}_{d}"
-            )
-        for d in range(horizon - max_consec + 1):
-            model.add_constraint(
-                model.sum(x[e, d + k, s] for k in range(max_consec) for s in shifts) <= max_consec,
-                f"max_consec_{e}_{d}"
-            )
-
-    # Objective function
-    penalty = model.sum(
-        w * (1 - x[e, d, s]) for e, d, s, w in shift_on_requests
-    ) + model.sum(
-        w * x[e, d, s] for e, d, s, w in shift_off_requests
-    ) + model.sum(
-        y_min[d, s] * cover[d][3] + y_max[d, s] * cover[d][4] for d, s in y_min
-    )
-    model.minimize(penalty)
-
-    # Resolution
-    solution = model.solve(log_output=True)
-
-    # Results
-    if solution:
-        print("Solution trouvée avec un coût total de :", solution.objective_value)
-        assignments = [
-            (e, d, s) for e in staff for d in range(horizon) for s in shifts if x[e, d, s].solution_value > 0.5
-        ]
-        return assignments
-    print("Pas de solution trouvée.")
-    return None
-
 def load_instance(file_path):
     """Function to load data from the instance"""
     data = {
@@ -162,3 +70,99 @@ def load_instance(file_path):
             })
 
     return data
+
+def solve_nurse_rostering(data):
+
+    # Création du modèle
+    model = Model(name="Nurse Rostering")
+
+    # Chargement des données depuis `data`
+    horizon = data["horizon"]
+    shifts = data["shifts"]
+    staff = data["staff"]
+    days_off = data["days_off"]
+    shift_on_requests = data["shift_on_requests"]
+    shift_off_requests = data["shift_off_requests"]
+    cover = data["cover"]
+
+    # Variables de décision
+    x = model.binary_var_dict(
+        ((e, d, s) for e in staff for d in range(horizon) for s in shifts),
+        name="x"
+    )
+    y_min = model.integer_var_dict(
+        ((d, s) for d in range(horizon) for s in shifts),
+        name="y_min"
+    )
+    y_max = model.integer_var_dict(
+        ((d, s) for d in range(horizon) for s in shifts),
+        name="y_max"
+    )
+
+    # Contraintes
+
+    # 1. Un employé ne peut travailler qu'un seul poste par jour
+    for e in staff:
+        for d in range(horizon):
+            model.add_constraint(model.sum(x[e, d, s] for s in shifts) <= 1, f"one_shift_per_day_{e}_{d}")
+
+    # 2. Contraintes sur les jours de repos
+    for e, days in days_off.items():
+        for d in days:
+            model.add_constraint(model.sum(x[e, d, s] for s in shifts) == 0, f"days_off_{e}_{d}")
+
+    # 3. Couverture des postes
+    for c in cover:
+        model.add_constraint(model.sum(x[e, c["day"], c["shift"]] for e in staff) + y_min[c["day"], c["shift"]] >= c["requirement"], f"cover_min_{c['day']}_{c['shift']}")
+        model.add_constraint(model.sum(x[e, c["day"], c["shift"]] for e in staff) - y_max[c["day"], c["shift"]] <= c["requirement"], f"cover_max_{c['day']}_{c['shift']}")
+
+    # 4. Contraintes sur le nombre total d'heures travaillées
+    for e in staff:
+        min_hours = int(staff[e]["constraints"][2])  # tmin
+        max_hours = int(staff[e]["constraints"][1])  # tmax
+        total_hours = model.sum(x[e, d, s] * int(shifts[s]["duration"]) for d in range(horizon) for s in shifts)
+        model.add_constraint(total_hours >= min_hours, f"min_hours_{e}")
+        model.add_constraint(total_hours <= max_hours, f"max_hours_{e}")
+
+
+    # 5 et 6. Contraintes sur les jours de travail consécutifs
+    # for e in staff:
+    #     min_consec = int(staff[e]["constraints"][4])
+    #     max_consec = int(staff[e]["constraints"][3])
+    #     for d in range(horizon - min_consec + 1):
+    #         model.add_constraint(
+    #             model.sum(x[e, d + k, s] for k in range(min_consec) for s in shifts) >= min_consec,
+    #             f"min_consec_{e}_{d}"
+    #         )
+    #     for d in range(horizon - max_consec + 1):
+    #         model.add_constraint(
+    #             model.sum(x[e, d + k, s] for k in range(max_consec) for s in shifts) <= max_consec,
+    #             f"max_consec_{e}_{d}"
+            )
+
+    # 7. Contraintes sur le nombre minimum de jours consécutifs de repos
+    # for e in staff:
+    #     min_consec_days_off = int(staff[e]["MinConsecutiveDaysOff"])
+    #     for d in range(horizon)
+
+    # Objective function
+    penalty = model.sum(
+        i["weight"] * (1 - x[i["employee"], i["day"], i["shift"]]) for i in shift_on_requests
+    ) + model.sum(
+        i["weight"] * x[i["employee"], i["day"], i["shift"]] for i in shift_off_requests
+    ) + model.sum(
+        y_min[d, s] * cover[d]["under_penalty"] + y_max[d, s] * cover[d]["over_penalty"] for d, s in y_min
+    )
+    model.minimize(penalty)
+
+    # Resolution
+    solution = model.solve(log_output=True)
+
+    # Results
+    if solution:
+        print("Solution trouvée avec un coût total de :", solution.objective_value)
+        assignments = [
+            (e, d, s) for e in staff for d in range(horizon) for s in shifts if x[e, d, s].solution_value > 0.5
+        ]
+        return assignments
+    return None
