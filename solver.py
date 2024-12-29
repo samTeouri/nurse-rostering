@@ -158,6 +158,14 @@ def solve_nurse_rostering(data):
             x[e, d, s] for d in range(horizon) if d % 7 in [5, 6] for s in shifts  # Samedi et dimanche
         )
         model.add_constraint(weekends_worked <= max_weekends, f"max_weekends_{e}")
+    
+    # 9. Contrainte sur les jours où un employé ne doit pas travailler
+    for e, days_off in data["days_off"].items():
+        for d in days_off:
+            model.add_constraint(
+                model.sum(x[e, d, s] for s in shifts) == 0,
+                f"day_off_{e}_{d}"
+            )
 
     # Objective function
     penalty = model.sum(
