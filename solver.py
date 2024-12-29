@@ -143,13 +143,21 @@ def solve_nurse_rostering(data):
     #         )
 
     # 7. Contraintes sur le nombre minimum de jours de repos consécutifs qu'un employé doit avoir
+    # for e in staff:
+    #     min_rest = int(staff[e]["constraints"][5])  # rmin
+    #     for d in range(horizon - min_rest + 1):
+    #         model.add_constraint(
+    #             model.sum(1 - model.sum(x[e, d + k, s] for s in shifts) for k in range(min_rest)) >= min_rest,
+    #             f"min_rest_{e}_{d}"
+    #         )
+
+    # 8. Contraintes sur le nombre maximum de week-ends qu'un employé ne peut travailler
     for e in staff:
-        min_rest = int(staff[e]["constraints"][5])  # rmin
-        for d in range(horizon - min_rest + 1):
-            model.add_constraint(
-                model.sum(1 - model.sum(x[e, d + k, s] for s in shifts) for k in range(min_rest)) >= min_rest,
-                f"min_rest_{e}_{d}"
-            )
+        max_weekends = int(staff[e]["constraints"][6])  # wmax
+        weekends_worked = model.sum(
+            x[e, d, s] for d in range(horizon) if d % 7 in [5, 6] for s in shifts  # Samedi et dimanche
+        )
+        model.add_constraint(weekends_worked <= max_weekends, f"max_weekends_{e}")
 
     # Objective function
     penalty = model.sum(
