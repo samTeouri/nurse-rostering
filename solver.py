@@ -124,13 +124,31 @@ def solve_nurse_rostering(data):
         model.add_constraint(total_hours >= min_hours, f"min_hours_{e}")
         model.add_constraint(total_hours <= max_hours, f"max_hours_{e}")
 
-    # 5. Constraintes sur le nombre de jours consécutifs qu'un employé ne peux travailler
+    # 5. Contraintes sur le nombre de jours consécutifs qu'un employé ne peux travailler
     for e in staff:
         max_consec = int(staff[e]["constraints"][3])  # cmax
         for d in range(horizon - max_consec + 1):
             model.add_constraint(
                 model.sum(x[e, d + k, s] for k in range(max_consec) for s in shifts) <= max_consec,
                 f"max_consecutive_{e}_{d}"
+            )
+    
+    # 6. Contraintes sur le nombre de jours consécutifs qu'un employé doit travailler
+    # for e in staff:
+    #     min_consec = int(staff[e]["constraints"][4])  # cmin
+    #     for d in range(horizon - min_consec + 1):
+    #         model.add_constraint(
+    #             model.sum(x[e, d + k, s] for k in range(min_consec) for s in shifts) >= min_consec,
+    #             f"min_consecutive_{e}_{d}"
+    #         )
+
+    # 7. Contraintes sur le nombre minimum de jours de repos consécutifs qu'un employé doit avoir
+    for e in staff:
+        min_rest = int(staff[e]["constraints"][5])  # rmin
+        for d in range(horizon - min_rest + 1):
+            model.add_constraint(
+                model.sum(1 - model.sum(x[e, d + k, s] for s in shifts) for k in range(min_rest)) >= min_rest,
+                f"min_rest_{e}_{d}"
             )
 
     # Objective function
