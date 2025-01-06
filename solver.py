@@ -1,3 +1,6 @@
+import os
+import xml.etree.ElementTree as ET
+
 from docplex.mp.model import Model
 
 def load_instance(file_path):
@@ -126,30 +129,33 @@ def solve_nurse_rostering(data):
 
     # 5. Contraintes sur le nombre de jours consécutifs qu'un employé ne peux travailler
     for e in staff:
-        max_consec = int(staff[e]["constraints"][3])  # cmax
-        for d in range(horizon - max_consec + 1):
+        cmax_e = int(staff[e]["constraints"][3])  # cmax
+        for d in range(horizon - cmax_e + 1):
             model.add_constraint(
-                model.sum(x[e, d + k, s] for k in range(max_consec) for s in shifts) <= max_consec,
+                model.sum(x[e, d + k, s] for k in range(cmax_e) for s in shifts) <= cmax_e,
                 f"max_consecutive_{e}_{d}"
             )
-    
-    # 6. Contraintes sur le nombre de jours consécutifs qu'un employé doit travailler
+
+    # # 6. Contrainte minimum de jours consécutifs travaillés
     # for e in staff:
-    #     min_consec = int(staff[e]["constraints"][4])  # cmin
-    #     for d in range(horizon - min_consec + 1):
+    #     cmin_e = int(staff[e]['constraints'][4])
+    #     for d in range(horizon - cmin_e):  # Parcours des plages possibles
+    #         # Somme des jours travaillés dans une plage de longueur cmin_e
     #         model.add_constraint(
-    #             model.sum(x[e, d + k, s] for k in range(min_consec) for s in shifts) >= min_consec,
-    #             f"min_consecutive_{e}_{d}"
+    #             model.sum(x[e, d + k, s] for k in range(d, d + cmin_e) for s in shifts) >= cmin_e,
+    #             f"min_consecutive_shifts_{e}_{d}"
     #         )
 
-    # 7. Contraintes sur le nombre minimum de jours de repos consécutifs qu'un employé doit avoir
+    # # 7. Contrainte minimum de jours consécutifs de repos
     # for e in staff:
-    #     min_rest = int(staff[e]["constraints"][5])  # rmin
-    #     for d in range(horizon - min_rest + 1):
+    #     rmin_e = int(staff[e]['constraints'][5])
+    #     for d in range(horizon - rmin_e + 1):  # Parcours des plages possibles
+    #         # Somme des jours de repos dans une plage de longueur rmin_e
     #         model.add_constraint(
-    #             model.sum(1 - model.sum(x[e, d + k, s] for s in shifts) for k in range(min_rest)) >= min_rest,
-    #             f"min_rest_{e}_{d}"
+    #             model.sum(1 - model.sum(x[e, d_rest, p] for p in shifts) for d_rest in range(d, d + rmin_e)) >= rmin_e,
+    #             f"min_consecutive_days_off_{e}_{d}"
     #         )
+
 
     # 8. Contraintes sur le nombre maximum de week-ends qu'un employé ne peut travailler
     for e in staff:
@@ -166,6 +172,17 @@ def solve_nurse_rostering(data):
                 model.sum(x[e, d, s] for s in shifts) == 0,
                 f"day_off_{e}_{d}"
             )
+    
+    # 10. Contrainte sur la couverture des postes
+    for c in cover:
+        model.add_constraint(
+            model.sum(x[e, c["day"], c["shift"]] for e in staff) + y_min[c["day"], c["shift"]] >= c["requirement"],
+            f"cover_min_{c['day']}_{c['shift']}"
+        )
+        model.add_constraint(
+            model.sum(x[e, c["day"], c["shift"]] for e in staff) - y_max[c["day"], c["shift"]] <= c["requirement"],
+            f"cover_max_{c['day']}_{c['shift']}"
+        )
 
     # Objective function
     penalty = model.sum(
@@ -181,10 +198,45 @@ def solve_nurse_rostering(data):
     solution = model.solve(log_output=True)
 
     # Results
+    # if solution:
+    #     print("Solution trouvée avec un coût total de :", solution.objective_value)
+    #     assignments = [
+    #         (e, d, s) for e in staff for d in range(horizon) for s in shifts if x[e, d, s].solution_value > 0.5
+    #     ]
+    #     return assignments
+    # return None
+
     if solution:
-        print("Solution trouvée avec un coût total de :", solution.objective_value)
-        assignments = [
-            (e, d, s) for e in staff for d in range(horizon) for s in shifts if x[e, d, s].solution_value > 0.5
-        ]
-        return assignments
-    return None
+        print("Solution found with cost:", solution.objective_value)
+        employee_assignments = {}
+        for emp in data['staff']:
+            employee_assignments[emp[0]] = []
+            for day in range(data['horizon']):
+                for shift in data['shifts']:
+                    if solution["x_{}_{}_{}".format(emp[0], day, shift[0])]:
+                        assigned_shift = solution["x_{}_{}_{}".format(emp[0], day, shift[0])]
+                        employee_assignments[emp[0]].append({"Day": day, "Shift": assigned_shift})
+
+        save_solution_to_ros("solution.ros", employee_assignments)
+
+        return solution.get_objective_value()
+    else:
+        print("No solution found.")
+        return None
+
+def save_solution_to_ros(filename, employee_assignments):
+    root = ET.Element("Roster", xmlns_xsi="http://www.w3.org/2001/XMLSchema-instance", xsi_noNamespaceSchemaLocation="Roster.xsd")
+    scheduling_period = ET.SubElement(root, "SchedulingPeriodFile")
+    scheduling_period.text = "../../Instance1.ros"
+
+    for emp_id, assignments in employee_assignments.items():
+        employee_element = ET.SubElement(root, "Employee", ID=emp_id)
+        for assign in assignments:
+            assign_element = ET.SubElement(employee_element, "Assign")
+            day_element = ET.SubElement(assign_element, "Day")
+            day_element.text = str(assign["Day"])
+            shift_element = ET.SubElement(assign_element, "Shift")
+            shift_element.text = str(assign["Shift"])
+
+    tree = ET.ElementTree(root)
+    tree.write(filename, encoding="utf-8", xml_declaration=True)
